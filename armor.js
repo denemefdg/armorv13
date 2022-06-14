@@ -1,114 +1,112 @@
-
-//aro#0001 //aro#0001 //aro#0001 //aro#0001 //aro#0001 //aro#0001
-//Armor Code //Armor Code //Armor Code //Armor Code
-//Youtube : Armor Development // Discord : discord.gg/armor
-//İyi Kodlamalar Bu Kod Aro Tarafından Armor Development Sunucusuna Hazırlanmıştır 
-//aro#0001 //aro#0001 //aro#0001 //aro#0001 //aro#0001 //aro#0001
-
-const { Client, Message, MessageEmbed, Collection } = require("discord.js");
-const fs = require("fs");
-const prefix = process.env.prefix;
-const token = process.env.token;
-
-//Armor Code //Armor Code //Armor Code //Armor Code
-
+const {
+	REST
+} = require('@discordjs/rest');
+const {
+	Routes
+} = require('discord-api-types/v9');
+const {
+	Client,
+	Intents,
+	MessageActionRow,
+	MessageButton,
+	MessageEmbed,
+	Collection,
+	MessageSelectMenu
+} = require("discord.js");
+const {
+	readdirSync
+} = require("fs");
 const client = new Client({
-  messageCacheLifetime: 60,
-  fetchAllMembers: false,
-  messageCacheMaxSize: 10,
-  restTimeOffset: 0,
-  restWsBridgetimeout: 100,
-  shards: "auto",
-  allowedMentions: {
-    parse: ["roles", "users", "everyone"],
-    repliedUser: true,
-  },
-  partials: ["MESSAGE", "CHANNEL", "REACTION"],
-  intents: 32767,
+	intents: 32767
+});
+const {
+	Player
+} = require("discord-player");
+const player = new Player(client);
+var embed = (g, u) => {
+	return new MessageEmbed().setColor(g.me.roles.highest.color).setFooter({
+		text: `${u.tag} tarafından istendi.`,
+		iconURL: `${u.displayAvatarURL()}`
+	});
+};
+client.login(process.env.token);
+client.on("ready", async () => {
+	console.log("Hazır");
 });
 
-//Armor Code //Armor Code //Armor Code //Armor Code
+// Buton Etkileşimleri
+client.buttonInteractions = new Collection();
+readdirSync("./buttonInteractions/").forEach(f => {
+	let cmd = require(`./buttonInteractions/${f}`);
+	client.buttonInteractions.set(cmd.customId, cmd);
+});
+// Buton Etkileşimleri
 
-module.exports = client;
+// Slash Etkileşimleri
+client.slashInteractions = new Collection();
+let globalSlashCommands = [];
+readdirSync("./slashInteractions/").forEach(f => {
+	let cmd = require(`./slashInteractions/${f}`);
+	client.slashInteractions.set(cmd.name, cmd);
+	globalSlashCommands.push(cmd.command);
+});
+// Slash Etkileşimleri
 
-require("./events/message.js")
-require("./events/ready.js")
 
-client.commands = new Collection();
-client.aliases = new Collection();
-fs.readdir("./komutlar/", (err, files) => {
-  if (err) console.error(err);
-  console.log(`Toplamda ${files.length} Adet Komut Var!`);
-  files.forEach(f => {
-    let props = require(`./komutlar/${f}`);
-    console.log(`${props.help.name} Komutu Aktif!`);
-    client.commands.set(props.help.name, props);
-    props.conf.aliases.forEach(alias => {
-      client.aliases.set(alias, props.help.name);
-    });
-  });
+// Slash Global Komutlar Ekleyelim
+let rest = new REST({
+	version: '9'
+}).setToken(process.env.token);
+
+client.on("ready", async () => {
+	try {
+
+		await rest.put(
+			Routes.applicationCommands(client.user.id), {
+				body: globalSlashCommands
+			},
+		);
+
+		console.log('Global komutlar güncellendi.');
+	} catch (error) {
+		console.error(error);
+	};
+});
+// Slash Global Komutlar Ekleyelim
+
+
+client.on("interactionCreate", async int => {
+
+	if (int.isCommand()) {
+		if (int.guild.me.voice.channelId && int.member.voice.channelId !== int.guild.me.voice.channelId) return await int.reply({
+			content: "Ben başka bir kanaldayım ! ",
+			ephemeral: true
+		});
+		else if (!int.guild.me.voice.channelId && int.commandName != "çal" && int.commandName != "ara" && int.commandName != "kapat") return await int.reply({
+			content: "Ben herhangi bir kanalda değilim ! ",
+			ephemeral: true
+		});
+		else if (!int.member.voice.channelId) return await int.reply({
+			content: "Bir ses kanalında değilsin ! ",
+			ephemeral: true
+		});
+		else client.slashInteractions.get(int.commandName)?.run(client, int, player, embed);
+	} else client.buttonInteractions.get("add-music").run(client, int, player, embed);
+
 });
 
-//Armor Code //Armor Code //Armor Code //Armor Code
+client.on('voiceStateUpdate', (oldState, newState) => {
+	if (oldState.channelId && !newState.channelId && newState.id === client.user.id) {
+		let queue = player.createQueue(oldState.guild, {
+			metadata: {
+				
+			}
+		});
 
-client.reload = command => {
-  return new Promise((resolve, reject) => {
-    try {
-      delete require.cache[require.resolve(`./komutlar/${command}`)];
-      let cmd = require(`./komutlar/${command}`);
-      client.commands.delete(command);
-      client.aliases.forEach((cmd, alias) => {
-        if (cmd === command) client.aliases.delete(alias);
-      });
-      client.commands.set(command, cmd);
-      cmd.conf.aliases.forEach(alias => {
-        client.aliases.set(alias, cmd.help.name);
-      });
-      resolve();
-    } catch (e) {
-      reject(e);
-    }
-  });
-};
+		queue.destroy(true);
+	};
+});
 
-//Armor Code //Armor Code //Armor Code //Armor Code
-
-client.load = command => {
-  return new Promise((resolve, reject) => {
-    try {
-      let cmd = require(`./komutlar/${command}`);
-      client.commands.set(command, cmd);
-      cmd.conf.aliases.forEach(alias => {
-        client.aliases.set(alias, cmd.help.name);
-      });
-      resolve();
-    } catch (e) {
-      reject(e);
-    }
-  });
-};
-
-//Armor Code //Armor Code //Armor Code //Armor Code
-
-client.unload = command => {
-  return new Promise((resolve, reject) => {
-    try {
-      delete require.cache[require.resolve(`./komutlar/${command}`)];
-      let cmd = require(`./komutlar/${command}`);
-      client.commands.delete(command);
-      client.aliases.forEach((cmd, alias) => {
-        if (cmd === command) client.aliases.delete(alias);
-      });
-      resolve();
-    } catch (e) {
-      reject(e);
-    }
-  });
-};
-
-
-//Armor Code //Armor Code //Armor Code //Armor Code
-
-client.login(token); 
-
-//Armor Code //Armor Code //Armor Code //Armor Code
+player.on("trackStart", (queue, track) => queue.metadata.channel.send({
+	embeds: [embed(queue.guild, track.requestedBy).setTitle("🎶 Çalıyor 🎶").addField("İsim", `${track.title}`, true).addField("Yayınlayan", `${track.author}`, true).addField("İzlenme", `${track.views}`, true).setImage(`${track.thumbnail}`)]
+}))
